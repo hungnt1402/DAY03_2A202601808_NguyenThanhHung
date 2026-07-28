@@ -94,11 +94,11 @@ Observation: {
 }
 
 Thought: Tôi đã có kết quả policy nên có thể trả lời cuối cùng.
-Final Answer: Đơn ORD1001 đủ điều kiện đổi/trả. Lý do: Đủ điều kiện đổi/trả với lý do: sai size. Hạn cuối xử lý là 2026-08-07.
+Final Answer: Đơn ORD1001 đủ điều kiện đổi/trả. Lý do: sai size. Hạn cuối xử lý là 2026-08-07.
 ```
 
 **Kết quả**: Pass. Agent gọi đúng 2 tool theo thứ tự, không tự bịa trạng thái đơn và dừng bằng Final Answer.
-**Bug nhỏ phát hiện được**: Final Answer bị lặp chữ ("Lý do: Đủ điều kiện đổi/trả với lý do: sai size.") vì `build_final_answer()` trong `src/app.py` nối trực tiếp field `reason` của tool (vốn đã có sẵn câu "Đủ điều kiện đổi/trả với lý do: ...") vào sau chữ "Lý do:". Không ảnh hưởng tính đúng đắn, chỉ là lỗi văn phong — Role 4 nên rút gọn.
+**🐛 Bug đã phát hiện & sửa**: Ban đầu Final Answer bị lặp chữ ("Lý do: Đủ điều kiện đổi/trả với lý do: sai size.") vì `build_final_answer()` trong `src/app.py` nối thẳng field `reason` của tool (vốn đã chứa sẵn câu "Đủ điều kiện đổi/trả với lý do: ...") vào sau chữ "Lý do:". Đã sửa bằng cách dùng `infer_reason(user_query)` — lý do gốc của khách — nên câu trả lời gọn đúng như trace ở trên.
 
 ### Test Case #5 - Edge Case đơn không tồn tại
 

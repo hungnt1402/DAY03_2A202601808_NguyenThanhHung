@@ -152,9 +152,11 @@ def build_final_answer(user_query: str, observations: list[dict]) -> str:
 
     if "eligible" in last:
         if last["eligible"]:
+            # Dùng lý do gốc của khách, vì reason từ tool đã kèm sẵn câu
+            # "Đủ điều kiện đổi/trả với lý do: ..." nên ghép vào sẽ bị lặp chữ.
             return (
                 f"Final Answer: Đơn {order_id} đủ điều kiện đổi/trả. "
-                f"Lý do: {last['reason']} Hạn cuối xử lý là {last.get('deadline')}."
+                f"Lý do: {infer_reason(user_query)}. Hạn cuối xử lý là {last.get('deadline')}."
             )
         return f"Final Answer: Đơn {order_id} chưa đủ điều kiện đổi/trả. Lý do: {last['reason']}"
 
