@@ -167,10 +167,14 @@ def check_return_policy(order_id: str, item_id: str, reason: str = "") -> str:
 
         item = _find_item(order, item_id)
         if not item:
+            # Kèm danh sách mã hợp lệ để Agent tự sửa ở vòng lặp sau, thay vì kết
+            # luận sai là sản phẩm không tồn tại (LLM hay bịa item_id nếu chưa lookup_order).
             return _json({
                 "status": "error",
                 "eligible": False,
                 "reason": f"Không tìm thấy sản phẩm '{item_id}' trong đơn {order['order_id']}.",
+                "valid_item_ids": [i["item_id"] for i in order["items"]],
+                "next_step": "Hãy gọi lại check_return_policy với một item_id hợp lệ ở trên.",
             })
 
         if order.get("status") != "delivered":
