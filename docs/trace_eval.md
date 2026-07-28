@@ -155,7 +155,65 @@ Final Answer: Mình chưa thể xử lý yêu cầu này. LỖI: Không tìm th�
 
 ### Hybrid Decision Flow
 
-Flowchart đã được tạo tại `docs/hybrid_flowchart.mermaid`.
+Flowchart gốc: `docs/hybrid_flowchart.mermaid` (vẽ theo đúng luồng code đang chạy thật trong `server.py` + `src/app.py`, không phải sơ đồ lý thuyết).
+
+```mermaid
+flowchart TD
+    Start(["Người dùng đặt câu hỏi"]) --> Mode{"Chế độ chọn<br/>trên giao diện"}
+
+    Mode -->|"Chatbot Baseline"| Chat
+    Mode -->|"ReAct Agent"| Router
+
+    Router{"Câu hỏi có mã đơn ORDxxxx?<br/>extract_order_id()"}
+    Router -->|"KHÔNG có mã đơn<br/>hỏi chính sách chung"| Chat
+    Router -->|"CÓ mã đơn<br/>cần bằng chứng thật"| Init
+
+    Chat["CHATBOT PATH<br/>run_baseline_api()<br/>LLM + CHATBOT_BASELINE_PROMPT<br/>1 LLM call — 0 tool"]
+    Chat --> ChatOut(["Trả lời chính sách chung<br/>KHÔNG khẳng định trạng thái đơn"])
+
+    Init["REACT AGENT PATH<br/>observations rỗng<br/>action_history rỗng"] --> Loop
+
+    Loop{"Còn budget?<br/>tối đa MAX_ITERATIONS = 3 vòng"}
+    Loop -->|"Hết budget"| Cap
+    Loop -->|"Còn budget"| Think
+
+    Think["Gọi LLM + REACT_SYSTEM_PROMPT<br/>kèm toàn bộ Observation trước đó"]
+    Think -->|"LLM lỗi API hoặc trả rỗng"| Fallback["Fallback plan_next_step()<br/>planner tất định"]
+    Fallback --> Check
+    Think --> Check
+
+    Check{"Output có<br/>Final Answer?"}
+    Check -->|"Có"| Done
+    Check -->|"Chưa"| ParseAct
+
+    ParseAct{"parse_action()<br/>đúng định dạng Action?"}
+    ParseAct -->|"Sai định dạng"| GParse["GUARDRAIL: Parser Action<br/>ghi Observation lỗi để Agent tự sửa"]
+    GParse --> Loop
+
+    ParseAct -->|"Đúng định dạng"| Repeat
+    Repeat{"Đã gọi Action này<br/>với cùng tham số?"}
+    Repeat -->|"Đã gọi rồi — bị kẹt"| GRepeat["GUARDRAIL: Repeated Action<br/>dừng an toàn"]
+    GRepeat --> Done
+
+    Repeat -->|"Chưa gọi"| Exec["execute_tool()<br/>lookup_order — check_return_policy<br/>estimate_refund — create_return_request"]
+    Exec --> Obs["Observation JSON thật từ tool<br/>Lỗi cũng trả JSON, không crash app<br/>Kèm valid_item_ids để Agent tự phục hồi"]
+    Obs --> Loop
+
+    Cap["GUARDRAIL: MAX_ITERATIONS<br/>build_final_answer() tổng hợp<br/>từ Observation đã thu được"]
+    Cap --> Done
+
+    Done(["Final Answer gửi người dùng"])
+
+    classDef chatbot fill:#064e3b,stroke:#10b981,color:#ecfdf5
+    classDef react fill:#1e3a8a,stroke:#3b82f6,color:#eff6ff
+    classDef guard fill:#7f1d1d,stroke:#f43f5e,color:#fef2f2
+    classDef endpoint fill:#312e81,stroke:#8b5cf6,color:#f5f3ff
+
+    class Chat,ChatOut chatbot
+    class Init,Think,Fallback,Exec,Obs react
+    class GParse,GRepeat,Cap guard
+    class Start,Done endpoint
+```
 
 **Quy tắc phân luồng**:
 
@@ -164,3 +222,5 @@ Flowchart đã được tạo tại `docs/hybrid_flowchart.mermaid`.
 | Chính sách chung, giấy tờ cần chuẩn bị, hướng dẫn đóng gói | Chatbot Baseline | Không cần dữ liệu riêng của đơn hàng |
 | Trạng thái đơn, điều kiện đổi/trả, hoàn tiền, tạo ticket | ReAct Agent | Cần tool để lấy bằng chứng và hành động đúng thứ tự |
 | Mã đơn/sản phẩm sai hoặc thiếu | ReAct Agent + Safe Fallback | Cần tool xác nhận lỗi rồi hỏi lại người dùng |
+
+**Điểm phân luồng nằm ở đâu trong code**: hàm `run_live_agent_api()` trong `server.py` gọi `extract_order_id(query)` ngay đầu. Không tìm thấy mã `ORDxxxx` nghĩa là câu hỏi không gắn với đơn cụ thể, nên đẩy sang Chatbot path thay vì bắt người dùng nhập mã đơn. Nhờ vậy câu như *"Cửa hàng có ship COD không?"* được trả lời bình thường thay vì bị chặn lại.
